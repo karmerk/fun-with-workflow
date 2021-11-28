@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.31903.286
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Workflow", "Workflow\Workflow.csproj", "{A8028701-5A99-401A-98B0-62C8AC082EFA}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Workflow.Test", "Workflow.Test\Workflow.Test.csproj", "{2C033739-A65A-4B76-984E-DCEA8FD4D790}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A8028701-5A99-401A-98B0-62C8AC082EFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A8028701-5A99-401A-98B0-62C8AC082EFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A8028701-5A99-401A-98B0-62C8AC082EFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A8028701-5A99-401A-98B0-62C8AC082EFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0593259C-8929-440A-9206-69356B1A4D35}
+	EndGlobalSection
+EndGlobal
