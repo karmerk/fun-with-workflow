@@ -23,17 +23,13 @@ public interface IWorkflowContext
 public sealed class WorkflowStatus
 {
     public bool IsCompleted { get; }
-    // Need to differentiate between cancellation of the workflow and cancellation because of app shutdown
-    public bool IsCanceled { get; }
-
+    
     internal ReadOnlyDictionary<string, string> State { get; }
 
     internal WorkflowStatus(bool isCompleted, bool isCanceled, ReadOnlyDictionary<string, string> state)
     {
         
         IsCompleted = isCompleted;
-        IsCanceled = isCanceled;
-
         State = state;
     }
 }
@@ -96,7 +92,6 @@ internal sealed class WorkflowContext : IWorkflowContext
     public bool IsReplaying { get; private set; }
     public bool IsCompleted { get; private set; }
 
-    // TODO: There are two levels of cancel. 1) Cancel what your doing app is closing. Workflow may be resumed later 2) Cancel this workflow
     private CancellationToken _cancellationToken;
 
     // Could drop the concurrent collection

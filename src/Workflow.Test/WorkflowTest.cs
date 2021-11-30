@@ -32,14 +32,12 @@ namespace Workflow.Test
                 var startNewWorkflow = new IncrementValueWorkflow();
                 var startNewStatus = await Workflow.StartNewAsync(startNewWorkflow, 42, cts.Token);
                 Assert.IsFalse(startNewStatus.IsCompleted);
-                Assert.IsTrue(startNewStatus.IsCanceled);
                 Assert.AreEqual(0, startNewWorkflow.CallsToIncrement);
 
                 // Because work will be reapplied to the workflow object, we must use a new instance.
                 var continueWorkflow = new IncrementValueWorkflow();
                 var continueStatus = await Workflow.ContinueAsync<IncrementValueWorkflow, int>(continueWorkflow, startNewStatus, CancellationToken.None);
                 Assert.IsTrue(continueStatus.IsCompleted);
-                Assert.IsFalse(continueStatus.IsCanceled);
                 Assert.AreEqual(1, continueWorkflow.CallsToIncrement);
 
                 Assert.AreNotEqual(startNewStatus, continueStatus);
