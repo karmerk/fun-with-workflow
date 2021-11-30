@@ -58,8 +58,6 @@ namespace Workflow.Test
             var value = await context.ExecuteAsync("+1", () => Increment(argument));
             
             Result = value;
-
-            context.SetCompleted();
         }
 
         public int CallsToIncrement { get; private set; }

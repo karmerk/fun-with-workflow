@@ -15,8 +15,6 @@ public interface IWorkflowContext
     public bool IsReplaying { get; }
 
     Task<T> ExecuteAsync<T>(string checkpoint, Func<Task<T>> func) where T : notnull;
-
-    void SetCompleted();
 }
 
 
@@ -26,7 +24,7 @@ public sealed class WorkflowStatus
     
     internal ReadOnlyDictionary<string, string> State { get; }
 
-    internal WorkflowStatus(bool isCompleted, bool isCanceled, ReadOnlyDictionary<string, string> state)
+    internal WorkflowStatus(bool isCompleted, ReadOnlyDictionary<string, string> state)
     {
         
         IsCompleted = isCompleted;
@@ -49,13 +47,19 @@ public sealed class Workflow
             context.SetCheckpoint("_WORKFLOW_START_", argument);
 
             await workflow.RunAsync(argument, context);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                // Is it possible we can infer this? a workflow should not return unless its completed
+                return new WorkflowStatus(true, context.State);
+            }
         }
         catch(OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // NOP
         }
 
-        return new WorkflowStatus(context.IsCompleted, cancellationToken.IsCancellationRequested, context.State);
+        return new WorkflowStatus(false, context.State);
     }
 
     // could it make sense to let the StartNew and Continue methods new the workflow objects to better to ensure the state?
@@ -75,17 +79,21 @@ public sealed class Workflow
             }
 
             await workflow.RunAsync(argument, context);
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                // Is it possible we can infer this? a workflow should not return unless its completed
+                return new WorkflowStatus(true, context.State);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // NOP
         }
 
-        return new WorkflowStatus(context.IsCompleted, cancellationToken.IsCancellationRequested, context.State);
+        return new WorkflowStatus(false, context.State);
     }
-    
 }
-
 
 internal sealed class WorkflowContext : IWorkflowContext
 {
@@ -185,13 +193,6 @@ internal sealed class WorkflowContext : IWorkflowContext
         _cancellationToken.ThrowIfCancellationRequested();
 
         return value;
-    }
-
-    
-
-    public void SetCompleted()
-    {
-        IsCompleted = true;
     }
 }
 
