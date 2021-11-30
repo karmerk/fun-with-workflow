@@ -47,6 +47,18 @@ namespace Workflow.Test
                 Assert.AreEqual(0, startNewWorkflow.CallsToIncrement);
             }
         }
+
+        [TestMethod]
+        public async Task ParallelWorkflow()
+        {
+            var workflow = new ParallelWorkflow();
+
+            var status = await Workflow.StartNewAsync(workflow, 50, CancellationToken.None);
+
+            Assert.IsTrue(status.IsCompleted);
+            Assert.AreEqual(1 + 2 + 3, workflow.Result);
+
+        }
     }
 
     internal sealed class IncrementValueWorkflow : IWorkflow<int>
@@ -66,6 +78,45 @@ namespace Workflow.Test
             CallsToIncrement++;
 
             return Task.FromResult(value + 1);
+        }
+    }
+
+
+    internal sealed class ParallelWorkflow : IWorkflow<int>
+    {
+        public int Result { get; private set; }
+
+        public async Task RunAsync(int argument, IWorkflowContext context)
+        {
+            var tasks = new Task<int>[]
+            {
+                context.ExecuteAsync("1", () => Wait(argument)),
+                context.ExecuteAsync("2", () => Wait(argument)),
+                context.ExecuteAsync("3", () => Wait(argument))
+            };
+
+            await Task.WhenAll(tasks);
+
+            var value = tasks.Sum(x => x.Result);
+
+            Result = value;
+        }
+
+
+        private long _callsToWait;
+        public int CallsToWait
+        {
+            get
+            {
+                return (int)Interlocked.Read(ref _callsToWait);
+            }
+        }
+        public async Task<int> Wait(int value)
+        {
+            var result = Interlocked.Increment(ref _callsToWait);
+            await Task.Delay(value);
+
+            return (int)result;
         }
     }
 }
