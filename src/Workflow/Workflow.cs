@@ -18,6 +18,7 @@ public interface IWorkflowContext
 }
 
 
+// Consider renaming this to WorkflowProgress ? 
 public sealed class WorkflowStatus
 {
     public bool IsCompleted { get; }
@@ -65,6 +66,7 @@ public sealed class Workflow
     // could it make sense to let the StartNew and Continue methods new the workflow objects to better to ensure the state?
     // but this will also force this workflow to know about DI because i want the workflows to be able to use services.
     // maybe that should be another thing that wraps all workflows and manages them
+    // this "other thing" could also handle persistency or at least facilitate it
     public static async Task<WorkflowStatus> ContinueAsync<T, TArgument>(T workflow, WorkflowStatus status, CancellationToken cancellationToken) where T : IWorkflow<TArgument> where TArgument : notnull
     {
         await Task.Yield();
@@ -95,6 +97,7 @@ public sealed class Workflow
     }
 }
 
+// context needs to be newed from a factory, because we need the option to replace the JsonSerializer
 internal sealed class WorkflowContext : IWorkflowContext
 {
     public bool IsReplaying { get; private set; }
@@ -102,7 +105,6 @@ internal sealed class WorkflowContext : IWorkflowContext
 
     private CancellationToken _cancellationToken;
 
-    // Could drop the concurrent collection
     private readonly ConcurrentDictionary<string, string> _state = new ConcurrentDictionary<string, string>();
     private readonly ConcurrentBag<string> _session = new ConcurrentBag<string>();
 
@@ -129,7 +131,7 @@ internal sealed class WorkflowContext : IWorkflowContext
 
     internal bool DoesCheckpointExist<T>(string checkpoint, out T value) where T : notnull
     {
-        // TODO rethink this session check thing
+        // TODO rethink this session check thing => maybe IWorkflowCallerGuard thing?
         if (_session.Contains(checkpoint))
         {
             throw new InvalidOperationException($"Cant call {nameof(ExecuteAsync)} with the same {nameof(checkpoint)} during the same session");
@@ -163,7 +165,11 @@ internal sealed class WorkflowContext : IWorkflowContext
     {
         _cancellationToken.ThrowIfCancellationRequested();
 
-        if(DoesCheckpointExist<T>(checkpoint, out var value))
+        // in order to better support parallel workflows, we need to have "reservations" of the checkpoint
+        // so multiple tasks does not call the same checkpoint twice.
+        // And also, should we allow multiple calls during the same session ? then multiple calls to same
+        // checkpoint should just block and then the result could be sent to all callers ?
+        if (DoesCheckpointExist<T>(checkpoint, out var value))
         {
             return value;
         }
@@ -197,19 +203,3 @@ internal sealed class WorkflowContext : IWorkflowContext
 }
 
 
-public sealed class MyWorkflow : IWorkflow<int>
-{
-    public async Task RunAsync(int argument, IWorkflowContext context)
-    {
-        await Task.Yield();
-
-        // Todo, could we grab the state from line number is that to crazy ? what if someone needs to fix a bug ?
-        var value = await context.ExecuteAsync("1", () => GetSomethingFromExternalServiceAsync(argument));
-
-    }
-
-    private Task<int> GetSomethingFromExternalServiceAsync(int argument)
-    {
-        return Task.FromResult(argument+1);
-    }
-}
