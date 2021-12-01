@@ -105,28 +105,17 @@ internal sealed class WorkflowContext : IWorkflowContext
 
     private CancellationToken _cancellationToken;
 
-    private readonly ConcurrentDictionary<string, string> _state = new ConcurrentDictionary<string, string>();
+    private readonly ConcurrentDictionary<string, string> _state;
     private readonly ConcurrentBag<string> _session = new ConcurrentBag<string>();
 
     internal ReadOnlyDictionary<string, string> State => new ReadOnlyDictionary<string, string>(_state);
 
-    internal WorkflowContext(CancellationToken cancellationToken)
+    internal WorkflowContext(CancellationToken cancellationToken, Dictionary<string, string>? state = null)
     {
         _cancellationToken = cancellationToken;
-
-        IsReplaying = false;
-    }
-
-    internal WorkflowContext(CancellationToken cancellationToken, Dictionary<string, string> state)
-    {
-        _cancellationToken = cancellationToken;
-
-        IsReplaying = true;
-
-        foreach (var kv in state)
-        {
-            _state.TryAdd(kv.Key, kv.Value);
-        }
+        _state = new ConcurrentDictionary<string, string>(state ?? Enumerable.Empty<KeyValuePair<string,string>>());
+        
+        IsReplaying = _state.Any();
     }
 
     internal bool DoesCheckpointExist<T>(string checkpoint, out T value) where T : notnull
