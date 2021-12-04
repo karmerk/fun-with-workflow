@@ -4,7 +4,6 @@ using System.Linq;
 
 namespace Workflow;
 
-
 public interface IWorkflow<T>
 {
     Task RunAsync(T argument, IWorkflowContext context);
@@ -14,30 +13,34 @@ public interface IWorkflowContext
 {
     public bool IsReplaying { get; }
 
-    Task<T> ExecuteAsync<T>(string checkpoint, Func<Task<T>> func) where T : notnull;
+    /// <summary>
+    /// Query to get data into the workflow
+    /// </summary>
+    Task<T> QueryAsync<T>(string key, Func<Task<T>> func) where T : notnull;
+    /// <summary>
+    /// Command to send data out of the workflow
+    /// </summary>
+    Task CommandAsync(string key, Func<Task> func);
 }
 
 
-// Consider renaming this to WorkflowProgress ? 
+// Consider renaming this to WorkflowProgress ? WorkflowResult ?
 public sealed class WorkflowStatus
 {
     public bool IsCompleted { get; }
-    
-    internal ReadOnlyDictionary<string, string> State { get; }
 
-    internal WorkflowStatus(bool isCompleted, ReadOnlyDictionary<string, string> state)
+    internal ReadOnlyDictionary<string, string> Progress { get; }
+
+    internal WorkflowStatus(bool isCompleted, ReadOnlyDictionary<string, string> progress)
     {
-        
         IsCompleted = isCompleted;
-        State = state;
+        Progress = progress;
     }
 }
 
 
 public sealed class Workflow
 {
-    
-
     public static async Task<WorkflowStatus> StartNewAsync<T, TArgument>(T workflow, TArgument argument, CancellationToken cancellationToken) where T : IWorkflow<TArgument> where TArgument : notnull
     {
         await Task.Yield();
@@ -45,14 +48,14 @@ public sealed class Workflow
         var context = new WorkflowContext(cancellationToken);
         try
         {
-            context.SetCheckpoint("_WORKFLOW_START_", argument);
+            _ = await context.NoCancelableQueryAsync("_WORKFLOW_START_", () => Task.FromResult(argument));
 
             await workflow.RunAsync(argument, context);
 
             if (!cancellationToken.IsCancellationRequested)
             {
                 // Is it possible we can infer this? a workflow should not return unless its completed
-                return new WorkflowStatus(true, context.State);
+                return new WorkflowStatus(true, context.GetProgress());
             }
         }
         catch(OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -60,7 +63,7 @@ public sealed class Workflow
             // NOP
         }
 
-        return new WorkflowStatus(false, context.State);
+        return new WorkflowStatus(false, context.GetProgress());
     }
 
     // could it make sense to let the StartNew and Continue methods new the workflow objects to better to ensure the state?
@@ -71,21 +74,18 @@ public sealed class Workflow
     {
         await Task.Yield();
 
-        var context = new WorkflowContext(cancellationToken, status.State.ToDictionary(x => x.Key, x => x.Value));
+        var context = new WorkflowContext(cancellationToken, status.Progress.ToDictionary(x => x.Key, x => x.Value));
 
         try
         {
-            if(!context.DoesCheckpointExist("_WORKFLOW_START_", out TArgument argument))
-            {
-                throw new InvalidOperationException("_WORKFLOW_START_ must be present to continue existing workflow");
-            }
+            var argument = await context.QueryAsync("_WORKFLOW_START_", () => Task.FromException<TArgument>(new InvalidOperationException("_WORKFLOW_START_ must be present to continue existing workflow")));
 
             await workflow.RunAsync(argument, context);
 
             if (!cancellationToken.IsCancellationRequested)
             {
                 // Is it possible we can infer this? a workflow should not return unless its completed
-                return new WorkflowStatus(true, context.State);
+                return new WorkflowStatus(true, context.GetProgress());
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -93,102 +93,89 @@ public sealed class Workflow
             // NOP
         }
 
-        return new WorkflowStatus(false, context.State);
+        return new WorkflowStatus(false, context.GetProgress());
     }
 }
 
-// context needs to be newed from a factory, because we need the option to replace the JsonSerializer
+// Context needs to be newed from a factory, because we need the option to replace the JsonSerializer and options
+// Also need the option to make an abstraction on _actions (progress) so this could be something that persists the 
+// data on the fly
 internal sealed class WorkflowContext : IWorkflowContext
 {
     public bool IsReplaying { get; private set; }
     public bool IsCompleted { get; private set; }
 
     private CancellationToken _cancellationToken;
+    private readonly ConcurrentDictionary<string, Task<string>> _actions = new ConcurrentDictionary<string, Task<string>>();
 
-    private readonly ConcurrentDictionary<string, string> _state;
-    private readonly ConcurrentBag<string> _session = new ConcurrentBag<string>();
-
-    internal ReadOnlyDictionary<string, string> State => new ReadOnlyDictionary<string, string>(_state);
+    // .Result is :(     - dont get result from the tasks that are failed or canceled
+    internal ReadOnlyDictionary<string, string> GetProgress() => new ReadOnlyDictionary<string, string>(_actions.ToDictionary(x=>x.Key, x=>x.Value.Result));
 
     internal WorkflowContext(CancellationToken cancellationToken, Dictionary<string, string>? state = null)
     {
         _cancellationToken = cancellationToken;
-        _state = new ConcurrentDictionary<string, string>(state ?? Enumerable.Empty<KeyValuePair<string,string>>());
-        
-        IsReplaying = _state.Any();
+
+        if (state != null)
+        {
+            _actions = new ConcurrentDictionary<string, Task<string>>(state.Select(x => KeyValuePair.Create(x.Key, Task.FromResult(x.Value))));
+        }
+
+        IsReplaying = state?.Any() ?? false;
     }
 
-    internal bool DoesCheckpointExist<T>(string checkpoint, out T value) where T : notnull
+    private async Task<string> QueryAsync<T>(Func<Task<T>> func)
     {
-        // TODO rethink this session check thing => maybe IWorkflowCallerGuard thing?
-        if (_session.Contains(checkpoint))
-        {
-            throw new InvalidOperationException($"Cant call {nameof(ExecuteAsync)} with the same {nameof(checkpoint)} during the same session");
-        }
-        _session.Add(checkpoint);
-
-        if (_state.TryGetValue(checkpoint, out var json))
-        {
-            IsReplaying = true;
-            value = System.Text.Json.JsonSerializer.Deserialize<T>(json)!;
-            return true;
-        }
+        var value = await func();
+        var json = System.Text.Json.JsonSerializer.Serialize(value);
 
         IsReplaying = false;
-
-        value = default!;
-        return false;
+        return json;
     }
 
-    internal void SetCheckpoint<T>(string checkpoint, T value)
+    private async Task<string> CommandAsync(Func<Task> func)
     {
-        var json = System.Text.Json.JsonSerializer.Serialize(value);
-        var add = _state.TryAdd(checkpoint, json);
-        if (!add)
-        {
-            throw new InvalidOperationException($"Can not add the same checkpoint twice: Checkpoint={checkpoint}");
-        }
+        await func();
+
+        IsReplaying = false;
+        return "{}"; // empty object
     }
 
-    public T Execute<T>(string checkpoint, Func<T> func) where T : notnull
+    // ¯\_(ツ)_/¯
+    internal async Task<T> NoCancelableQueryAsync<T>(string key, Func<Task<T>> func) where T : notnull
+    {
+        var json = await _actions.GetOrAdd(key, k => QueryAsync(func));
+
+        // the initial get, gets an unneeded roundtrip to json
+
+        var value = System.Text.Json.JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException($"Failed to deserialize {typeof(T)} from JSON: {json}");
+
+        return value;
+    }
+
+    public async Task<T> QueryAsync<T>(string key, Func<Task<T>> func) where T : notnull
     {
         _cancellationToken.ThrowIfCancellationRequested();
 
-        // in order to better support parallel workflows, we need to have "reservations" of the checkpoint
-        // so multiple tasks does not call the same checkpoint twice.
-        // And also, should we allow multiple calls during the same session ? then multiple calls to same
-        // checkpoint should just block and then the result could be sent to all callers ?
-        if (DoesCheckpointExist<T>(checkpoint, out var value))
-        {
-            return value;
-        }
-
-        value = func();
-
-        SetCheckpoint(checkpoint, value);
+        // the initial add, gets an unneeded roundtrip to json
+        var json = await _actions.GetOrAdd(key, k => QueryAsync(func));
+        var value = System.Text.Json.JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException($"Failed to deserialize {typeof(T)} from JSON: {json}");
 
         _cancellationToken.ThrowIfCancellationRequested();
 
         return value;
     }
 
-    public async Task<T> ExecuteAsync<T>(string checkpoint, Func<Task<T>> func) where T : notnull
+    public async Task CommandAsync(string key, Func<Task> func)
     {
         _cancellationToken.ThrowIfCancellationRequested();
 
-        if (DoesCheckpointExist<T>(checkpoint, out var value))
-        {
-            return value;
-        }
-
-        value = await func();
-
-        SetCheckpoint(checkpoint, value);
+        _ = await _actions.GetOrAdd(key, k => CommandAsync(func));
 
         _cancellationToken.ThrowIfCancellationRequested();
-
-        return value;
     }
+
+
+ 
 }
 
 
