@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Workflow", "Workflow\Workfl
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Workflow.Test", "Workflow.Test\Workflow.Test.csproj", "{2C033739-A65A-4B76-984E-DCEA8FD4D790}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Worflow.ExampleApp", "Worflow.ExampleApp\Worflow.ExampleApp.csproj", "{AB4536B2-888C-41E5-A7F8-1E0456D189E3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2C033739-A65A-4B76-984E-DCEA8FD4D790}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB4536B2-888C-41E5-A7F8-1E0456D189E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB4536B2-888C-41E5-A7F8-1E0456D189E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB4536B2-888C-41E5-A7F8-1E0456D189E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB4536B2-888C-41E5-A7F8-1E0456D189E3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

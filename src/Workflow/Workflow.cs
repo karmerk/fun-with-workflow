@@ -13,6 +13,8 @@ public interface IWorkflowContext
 {
     public bool IsReplaying { get; }
 
+    public CancellationToken CancellationToken { get; }
+
     /// <summary>
     /// Query to get data into the workflow
     /// </summary>
@@ -105,15 +107,15 @@ internal sealed class WorkflowContext : IWorkflowContext
     public bool IsReplaying { get; private set; }
     public bool IsCompleted { get; private set; }
 
-    private CancellationToken _cancellationToken;
+    public CancellationToken CancellationToken { get; }
     private readonly ConcurrentDictionary<string, Task<string>> _actions = new ConcurrentDictionary<string, Task<string>>();
 
-    // .Result is :(     - dont get result from the tasks that are failed or canceled
-    internal ReadOnlyDictionary<string, string> GetProgress() => new ReadOnlyDictionary<string, string>(_actions.ToDictionary(x=>x.Key, x=>x.Value.Result));
+    // .Result is :(
+    internal ReadOnlyDictionary<string, string> GetProgress() => new ReadOnlyDictionary<string, string>(_actions.Where(x=>x.Value.IsCompletedSuccessfully).ToDictionary(x=>x.Key, x=>x.Value.Result));
 
     internal WorkflowContext(CancellationToken cancellationToken, Dictionary<string, string>? state = null)
     {
-        _cancellationToken = cancellationToken;
+        CancellationToken = cancellationToken;
 
         if (state != null)
         {
@@ -154,24 +156,24 @@ internal sealed class WorkflowContext : IWorkflowContext
 
     public async Task<T> QueryAsync<T>(string key, Func<Task<T>> func) where T : notnull
     {
-        _cancellationToken.ThrowIfCancellationRequested();
+        CancellationToken.ThrowIfCancellationRequested();
 
         // the initial add, gets an unneeded roundtrip to json
         var json = await _actions.GetOrAdd(key, k => QueryAsync(func));
         var value = System.Text.Json.JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException($"Failed to deserialize {typeof(T)} from JSON: {json}");
 
-        _cancellationToken.ThrowIfCancellationRequested();
+        CancellationToken.ThrowIfCancellationRequested();
 
         return value;
     }
 
     public async Task CommandAsync(string key, Func<Task> func)
     {
-        _cancellationToken.ThrowIfCancellationRequested();
+        CancellationToken.ThrowIfCancellationRequested();
 
         _ = await _actions.GetOrAdd(key, k => CommandAsync(func));
 
-        _cancellationToken.ThrowIfCancellationRequested();
+        CancellationToken.ThrowIfCancellationRequested();
     }
 
 
