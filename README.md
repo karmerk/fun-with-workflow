@@ -18,6 +18,9 @@ public async Task RunAsync(Request request, IWorkflowContext context)
 }
 ```
 
+Edit: I thought about this some during the last year.. If the workflow is replayable (which is the idea), then the order command/query calls should also be constant, making the key ("ServiceA", "ServiceB-Wait" and "ServiceB" in the example above) unnessasary.
+
+
 When the method runs out the workflow is completed. For it to work it requires the calls out to be 
 wrapped in the ``context.Query`` or ``context.Command``, these methods are the ones that save the 
 progress made inside the workflow - and reinjects this data when the workflow is continued later.
